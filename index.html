@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Karina KWANGYA Rhythm Runner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+TC:wght@400;700&display=swap');
+    
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #080312;
+      color: #ffffff;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    
+    .font-orbitron {
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    /* Glow utilities */
+    .glow-purple {
+      box-shadow: 0 0 25px rgba(186, 85, 211, 0.6), inset 0 0 15px rgba(186, 85, 211, 0.4);
+    }
+    .glow-pink {
+      box-shadow: 0 0 25px rgba(255, 0, 127, 0.6);
+    }
+    .text-glow-pink {
+      text-shadow: 0 0 10px #ff007f, 0 0 20px #ff007f;
+    }
+    .text-glow-cyan {
+      text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-center items-center p-2 sm:p-4 overflow-x-hidden">
+
+  <!-- Header / Title -->
+  <header class="text-center mb-3">
+    <h1 class="text-2xl sm:text-4xl font-black font-orbitron tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-400 to-cyan-400 text-glow-pink">
+      æ-KARINA RHYTHM RUNNER
+    </h1>
+    <p class="text-xs sm:text-sm text-purple-300 opacity-90 mt-1">
+      ✨ 切換 Vocal & Dance 雙軌道 ‧ 收集音符擊打 ‧ 觸發 KWANGYA FEVER Mode!
+    </p>
+  </header>
+
+  <!-- Game Box Canvas Container -->
+  <div class="relative w-full max-w-4xl bg-purple-950/40 rounded-2xl border-2 border-purple-500/50 p-2 sm:p-4 glow-purple backdrop-blur-md">
+    
+    <div class="relative w-full overflow-hidden rounded-xl bg-black aspect-[8/3] border border-purple-900">
+      <canvas id="gameCanvas" class="w-full h-full block cursor-pointer"></canvas>
+
+      <!-- Mobile Touch Zones Overlay (Visual Cue) -->
+      <div id="touchControls" class="absolute inset-0 flex flex-col pointer-events-none md:hidden">
+        <div class="h-1/2 w-full border-b border-purple-500/20 flex items-center justify-end pr-4 text-purple-400/40 font-orbitron text-xs">
+          UP TRACK (VOCAL) ▲
+        </div>
+        <div class="h-1/2 w-full flex items-center justify-end pr-4 text-pink-400/40 font-orbitron text-xs">
+          DOWN TRACK (DANCE) ▼
+        </div>
+      </div>
+    </div>
+
+    <!-- FEVER Bar & Control Instructions Footer -->
+    <div class="mt-3 flex flex-col sm:flex-row items-center justify-between gap-2 px-1 text-xs sm:text-sm">
+      
+      <!-- FEVER Progress Bar -->
+      <div class="w-full sm:w-1/2 flex items-center gap-2 bg-purple-900/40 p-2 rounded-lg border border-purple-700/40">
+        <span class="font-orbitron font-bold text-pink-400 min-w-[70px]">FEVER BAR</span>
+        <div class="w-full bg-gray-950 h-3 rounded-full overflow-hidden border border-purple-500/30">
+          <div id="feverFill" class="bg-gradient-to-r from-pink-500 via-purple-400 to-cyan-400 h-full w-0 transition-all duration-150 rounded-full shadow-[0_0_10px_#ff007f]"></div>
+        </div>
+        <span id="feverText" class="font-orbitron text-xs font-bold text-cyan-300">0/10</span>
+      </div>
+
+      <!-- Control Guides -->
+      <div class="flex items-center gap-3 text-purple-200">
+        <div class="flex items-center gap-1">
+          <kbd class="px-2 py-0.5 bg-purple-950 border border-purple-500 rounded text-xs font-orbitron font-bold">▲ W</kbd>
+          <span>/</span>
+          <kbd class="px-2 py-0.5 bg-purple-950 border border-purple-500 rounded text-xs font-orbitron font-bold">▼ S</kbd>
+          <span class="text-xs text-purple-300 ml-1">切換軌道</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <kbd class="px-2 py-0.5 bg-purple-950 border border-purple-500 rounded text-xs font-orbitron font-bold">Space</kbd>
+          <span class="text-xs text-purple-300">開局 / 重來</span>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Detailed Game Mechanics & Tips -->
+  <footer class="mt-4 max-w-4xl text-center text-xs text-purple-400/80 leading-relaxed px-2">
+    <p>🎮 <b class="text-purple-200">玩法規則：</b> 踩在與 <span class="text-pink-400 font-bold">💖 愛心 / ✨ 鑽石光符</span> 相同的軌道上以達成 <span class="text-cyan-300 font-bold">PERFECT 擊打</span> 累積 Combo！遇到 <span class="text-red-500 font-bold">⚡ 雷射極光 / 障礙物</span> 必須立刻切換軌道閃避！</p>
+  </footer>
+
+<script>
+/**
+ * KARINA KWANGYA RHYTHM RUNNER - Main Engine
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const feverFill = document.getElementById('feverFill');
+const feverText = document.getElementById('feverText');
+
+// Set native resolution
+canvas.width = 1000;
+canvas.height = 375;
+
+// Audio Synth Engine (Web Audio API)
+class SoundEngine {
+  constructor() {
+    this.ctx = null;
+  }
+  
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playSwitch() {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const now = this.ctx.currentTime;
+    
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+    
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
+  }
+
+  playHit(isFever = false) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    
+    // Synth chord for note hit
+    const freqs = isFever ? [523.25, 659.25, 783.99, 1046.50] : [523.25, 659.25, 783.99]; // C5, E5, G5, C6
+    freqs.forEach((freq, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.03);
+      
+      gain.gain.setValueAtTime(0.15, now + idx * 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.03 + 0.2);
+      
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + idx * 0.03);
+      osc.stop(now + idx * 0.03 + 0.2);
+    });
+  }
+
+  playFeverTrigger() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(300, now);
+    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.4);
+    
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  }
+
+  playHurt() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.linearRampToValueAtTime(60, now + 0.3);
+    
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+    
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.3);
+  }
+}
+
+const sounds = new SoundEngine();
+
+// Tracks Definition
+const TRACKS = {
+  UP: 0,   // Vocal Track (Top)
+  DOWN: 1  // Dance Track (Bottom)
+};
+
+const TRACK_Y = {
+  [TRACKS.UP]: 135,
+  [TRACKS.DOWN]: 275
+};
+
+// Game Global State
+let isGameStarted = false;
+let isGameOver = false;
+let score = 0;
+let highScore = 0;
+let combo = 0;
+let maxCombo = 0;
+let feverCount = 0;
+let isFever = false;
+let feverTimer = 0;
+let gameSpeed = 7.5;
+let frameCount = 0;
+
+// Floating Score & Hit Effect Text System
+let floatTexts = [];
+function addFloatingText(text, x, y, color = '#00ffff', scale = 1) {
+  floatTexts.push({ text, x, y, color, scale, alpha: 1, vy: -2 });
+}
+
+// Background Particle Starfield
+const stars = Array.from({ length: 45 }, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  size: Math.random() * 2.5 + 1,
+  speed: Math.random() * 2 + 1,
+  alpha: Math.random()
+}));
+
+// Karina Player Character
+const karina = {
+  track: TRACKS.DOWN,
+  currentY: TRACK_Y[TRACKS.DOWN],
+  targetY: TRACK_Y[TRACKS.DOWN],
+  x: 140,
+  width: 50,
+  height: 65,
+  switchSpeed: 0.25, // Lerp speed
+  legAngle: 0,
+  hairWave: 0,
+  
+  switchTrack(newTrack) {
+    if (this.track !== newTrack) {
+      this.track = newTrack;
+      this.targetY = TRACK_Y[newTrack];
+      sounds.playSwitch();
+    }
+  },
+
+  update() {
+    // Smooth transition between tracks
+    this.currentY += (this.targetY - this.currentY) * this.switchSpeed;
+    
+    // Animation frames
+    this.legAngle = Math.sin(frameCount * 0.35) * 16;
+    this.hairWave = Math.sin(frameCount * 0.2) * 6;
+  },
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.currentY);
+
+    const isVocalTrack = this.track === TRACKS.UP;
+
+    // FEVER Aura Effect
+    if (isFever) {
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 25;
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.25)';
+      ctx.beginPath();
+      ctx.arc(0, -25, 45, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 1. Karina Long Flowing Hair (KWANGYA Purple Gradient Hair)
+    const hairGrad = ctx.createLinearGradient(-25, -50, -5, 0);
+    hairGrad.addColorStop(0, '#2b0938');
+    hairGrad.addColorStop(1, '#ff007f');
+    ctx.fillStyle = hairGrad;
+    
+    ctx.beginPath();
+    ctx.ellipse(-14 + this.hairWave * 0.5, -28, 14, 26, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Body / Outfit (Cyber Stage Outfit)
+    ctx.fillStyle = isVocalTrack ? '#ba55d3' : '#ff007f'; // Vocal mode Purple, Dance mode Cyber Pink
+    ctx.fillRect(-12, -35, 24, 28);
+    
+    // Belt / Detail
+    ctx.fillStyle = '#00ffff';
+    ctx.fillRect(-12, -15, 24, 4);
+
+    // 3. Head & Face
+    ctx.fillStyle = '#ffe0bd';
+    ctx.beginPath();
+    ctx.arc(0, -45, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes / Cat-eye Stage Makeup
+    ctx.fillStyle = '#120024';
+    ctx.fillRect(2, -48, 6, 3);
+
+    // Cat-Ear Headband (Signature Karina aesthetic)
+    ctx.fillStyle = isFever ? '#00ffff' : '#ff007f';
+    ctx.beginPath();
+    ctx.moveTo(-8, -55); ctx.lineTo(-4, -65); ctx.lineTo(0, -55);
+    ctx.moveTo(0, -55); ctx.lineTo(4, -65); ctx.lineTo(8, -55);
+    ctx.fill();
+
+    // 4. Arms & Mode Props
+    ctx.strokeStyle = '#ffe0bd';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+
+    if (isVocalTrack) {
+      // Holding Glowing Stage Mic
+      ctx.moveTo(0, -28); ctx.lineTo(14, -36);
+      ctx.stroke();
+      
+      // Mic
+      ctx.fillStyle = '#00ffff';
+      ctx.beginPath();
+      ctx.arc(16, -38, 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Dance Pose
+      ctx.moveTo(0, -28); ctx.lineTo(12, -18);
+      ctx.stroke();
+    }
+
+    // 5. Running Legs
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    // Left Leg
+    ctx.moveTo(-4, -7);
+    ctx.lineTo(-4 + this.legAngle, 12);
+    // Right Leg
+    ctx.moveTo(4, -7);
+    ctx.lineTo(4 - this.legAngle, 12);
+    ctx.stroke();
+
+    // Boots
+    ctx.fillStyle = '#120024';
+    ctx.fillRect(-7 + this.legAngle, 5, 7, 9);
+    ctx.fillRect(1 - this.legAngle, 5, 7, 9);
+
+    ctx.restore();
+  }
+};
+
+// Spawn Objects (Notes & Lasers)
+let gameObjects = [];
+
+class RhythmNote {
+  constructor(track, type = 'heart') {
+    this.track = track;
+    this.y = TRACK_Y[track] - 25;
+    this.x = canvas.width + 30;
+    this.type = type; // 'heart' or 'diamond'
+    this.size = 20;
+    this.markedForDeletion = false;
+    this.pulse = 0;
+  }
+
+  update() {
+    this.x -= gameSpeed;
+    this.pulse += 0.1;
+    if (this.x < -40) this.markedForDeletion = true;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    const scale = 1 + Math.sin(this.pulse) * 0.15;
+    ctx.scale(scale, scale);
+
+    if (this.type === 'heart') {
+      // Glowing Pink Heart Note 💖
+      ctx.fillStyle = '#ff007f';
+      ctx.shadowColor = '#ff007f';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.moveTo(0, 4);
+      ctx.bezierCurveTo(0, 0, -10, 0, -10, -10);
+      ctx.bezierCurveTo(-10, -18, 0, -18, 0, -7);
+      ctx.bezierCurveTo(0, -18, 10, -18, 10, -10);
+      ctx.bezierCurveTo(10, 0, 0, 0, 0, 4);
+      ctx.fill();
+    } else {
+      // Glowing Cyan Diamond Note ✨
+      ctx.fillStyle = '#00ffff';
+      ctx.shadowColor = '#00ffff';
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.moveTo(0, -15);
+      ctx.lineTo(12, 0);
+      ctx.lineTo(0, 15);
+      ctx.lineTo(-12, 0);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
+class LaserObstacle {
+  constructor(track) {
+    this.track = track;
+    this.y = TRACK_Y[track] - 25;
+    this.x = canvas.width + 40;
+    this.width = 45;
+    this.height = 30;
+    this.markedForDeletion = false;
+  }
+
+  update() {
+    this.x -= gameSpeed;
+    if (this.x < -60) this.markedForDeletion = true;
+  }
+
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+
+    // Danger Red Laser Wave Barrier ⚡
+    ctx.shadowColor = '#ff0033';
+    ctx.shadowBlur = 20;
+
+    // Laser Core
+    ctx.fillStyle = '#ff0033';
+    ctx.fillRect(-this.width / 2, -10, this.width, 20);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(-this.width / 2, -3, this.width, 6);
+
+    // Electric Waves
+    ctx.strokeStyle = '#ff99aa';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-this.width / 2, -15);
+    ctx.lineTo(-this.width / 4, 15);
+    ctx.lineTo(0, -15);
+    ctx.lineTo(this.width / 4, 15);
+    ctx.lineTo(this.width / 2, -15);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+// Spawner logic rhythm timing
+function handleSpawning() {
+  // Spawn obstacles or notes based on rhythm frame ticks
+  if (frameCount % Math.max(30, Math.floor(65 - gameSpeed * 2.5)) === 0) {
+    const randomVal = Math.random();
+    
+    // Choose track randomly
+    const spawnTrack = Math.random() > 0.5 ? TRACKS.UP : TRACKS.DOWN;
+
+    if (randomVal < 0.65) {
+      // Spawn Rhythm Note
+      const noteType = Math.random() > 0.4 ? 'heart' : 'diamond';
+      gameObjects.push(new RhythmNote(spawnTrack, noteType));
+    } else if (!isFever) {
+      // Spawn Laser Obstacle (Only when NOT in Fever Mode)
+      gameObjects.push(new LaserObstacle(spawnTrack));
+    }
+  }
+}
+
+// Collision & Hit Check Engine
+function checkHitsAndCollisions() {
+  for (let obj of gameObjects) {
+    if (obj.markedForDeletion) continue;
+
+    // FEVER Auto Magnet Note Attraction
+    if (isFever && obj instanceof RhythmNote) {
+      obj.y += (karina.currentY - 25 - obj.y) * 0.2;
+      if (obj.x > karina.x + 100) {
+        obj.x -= gameSpeed * 0.8;
+      }
+    }
+
+    // Distance calculation
+    const dx = Math.abs(obj.x - karina.x);
+    const isSameTrack = Math.abs(obj.y - (karina.currentY - 25)) < 35;
+
+    if (obj instanceof RhythmNote) {
+      if (dx < 35 && isSameTrack) {
+        obj.markedForDeletion = true;
+        combo++;
+        if (combo > maxCombo) maxCombo = combo;
+
+        const baseScore = obj.type === 'diamond' ? 150 : 100;
+        const hitScore = Math.floor(baseScore * (1 + combo * 0.1) * (isFever ? 2 : 1));
+        score += hitScore;
+
+        // Fever counter increase
+        if (!isFever) {
+          feverCount = Math.min(10, feverCount + 1);
+          updateFeverUI();
+
+          if (feverCount >= 10) {
+            triggerFeverMode();
+          }
+        }
+
+        sounds.playHit(isFever);
+        addFloatingText(combo > 5 ? 'PERFECT! 🔥' : 'PERFECT!', karina.x, karina.currentY - 50, isFever ? '#00ffff' : '#ff007f');
+      }
+    } else if (obj instanceof LaserObstacle) {
+      if (dx < 30 && isSameTrack) {
+        if (isFever) {
+          // Break obstacle during Fever
+          obj.markedForDeletion = true;
+          score += 200;
+          sounds.playHit(true);
+          addFloatingText('DESTROYS! 💥', obj.x, obj.y, '#00ffff');
+        } else {
+          // Game Over Collision
+          triggerGameOver();
+        }
+      }
+    }
+  }
+}
+
+function triggerFeverMode() {
+  isFever = true;
+  feverTimer = 300; // 5 seconds (60fps * 5)
+  sounds.playFeverTrigger();
+  addFloatingText('✨ KWANGYA FEVER MODE! ✨', canvas.width / 2, 100, '#00ffff', 1.5);
+}
+
+function updateFeverUI() {
+  const percent = (feverCount / 10) * 100;
+  feverFill.style.width = `${percent}%`;
+  feverText.innerText = isFever ? 'FEVER!!' : `${feverCount}/10`;
+}
+
+function triggerGameOver() {
+  isGameOver = true;
+  isGameStarted = false;
+  sounds.playHurt();
+  if (score > highScore) highScore = score;
+}
+
+function resetGame() {
+  score = 0;
+  combo = 0;
+  feverCount = 0;
+  isFever = false;
+  feverTimer = 0;
+  gameSpeed = 7.5;
+  frameCount = 0;
+  gameObjects = [];
+  floatTexts = [];
+  karina.switchTrack(TRACKS.DOWN);
+  updateFeverUI();
+  isGameOver = false;
+  isGameStarted = true;
+}
+
+// Background Drawing (Stage Tracks & Stars)
+function drawBackground() {
+  // KWANGYA Stars
+  ctx.fillStyle = isFever ? '#00ffff' : '#ba55d3';
+  stars.forEach(star => {
+    star.x -= star.speed * (isFever ? 2.5 : 1);
+    if (star.x < 0) star.x = canvas.width;
+    ctx.globalAlpha = Math.abs(Math.sin(frameCount * 0.03 + star.alpha * 10));
+    ctx.fillRect(star.x, star.y, star.size, star.size);
+  });
+  ctx.globalAlpha = 1.0;
+
+  // Background Gradient Shift
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  if (isFever) {
+    bgGrad.addColorStop(0, '#15002b');
+    bgGrad.addColorStop(0.5, '#2a004f');
+    bgGrad.addColorStop(1, '#050014');
+  } else {
+    bgGrad.addColorStop(0, '#090214');
+    bgGrad.addColorStop(0.5, '#16052b');
+    bgGrad.addColorStop(1, '#080312');
+  }
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw 2 Stage Tracks (Vocal & Dance Lanes)
+  [TRACKS.UP, TRACKS.DOWN].forEach((trackKey) => {
+    const y = TRACK_Y[trackKey];
+    const isCurrent = karina.track === trackKey;
+
+    // Track Lane Neon Line
+    ctx.strokeStyle = isFever 
+      ? '#00ffff' 
+      : (isCurrent ? '#ff007f' : 'rgba(186, 85, 211, 0.4)');
+    ctx.lineWidth = isCurrent ? 4 : 2;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = isCurrent ? 15 : 5;
+
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+
+    // Track Labels
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = isCurrent ? '#ffffff' : 'rgba(255, 255, 255, 0.4)';
+    ctx.font = 'bold 12px Orbitron';
+    ctx.textAlign = 'left';
+    ctx.fillText(trackKey === TRACKS.UP ? '♫ VOCAL TRACK' : '💃 DANCE TRACK', 15, y - 10);
+  });
+
+  // Track Speed Moving Grid Dots
+  const gridOffset = (frameCount * gameSpeed) % 40;
+  ctx.fillStyle = isFever ? '#00ffff' : '#ba55d3';
+  for (let x = canvas.width - gridOffset; x > 0; x -= 40) {
+    ctx.fillRect(x, TRACK_Y[TRACKS.UP] + 2, 4, 2);
+    ctx.fillRect(x, TRACK_Y[TRACKS.DOWN] + 2, 4, 2);
+  }
+}
+
+// Draw Overlay HUD & Text Effects
+function drawHUD() {
+  // Combo Text
+  if (combo > 1) {
+    ctx.save();
+    ctx.font = '900 24px Orbitron';
+    ctx.fillStyle = isFever ? '#00ffff' : '#ff007f';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 10;
+    ctx.textAlign = 'left';
+    ctx.fillText(`${combo} COMBO!`, 30, 45);
+    ctx.restore();
+  }
+
+  // Score UI
+  ctx.font = '700 18px Orbitron';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'right';
+  ctx.fillText(`SCORE: ${score}`, canvas.width - 25, 35);
+  ctx.fillStyle = '#ba55d3';
+  ctx.font = '13px Orbitron';
+  ctx.fillText(`HI-SCORE: ${highScore}`, canvas.width - 25, 55);
+
+  // Floating Particle Text Animations
+  for (let i = floatTexts.length - 1; i >= 0; i--) {
+    const ft = floatTexts[i];
+    ft.y += ft.vy;
+    ft.alpha -= 0.025;
+
+    if (ft.alpha <= 0) {
+      floatTexts.splice(i, 1);
+      continue;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = ft.alpha;
+    ctx.font = `900 ${Math.floor(16 * ft.scale)}px Orbitron`;
+    ctx.fillStyle = ft.color;
+    ctx.shadowColor = ft.color;
+    ctx.shadowBlur = 10;
+    ctx.textAlign = 'center';
+    ctx.fillText(ft.text, ft.x, ft.y);
+    ctx.restore();
+  }
+}
+
+// Main Game Loop
+function mainLoop() {
+  frameCount++;
+
+  // Handle Fever Mode Countdown
+  if (isFever) {
+    feverTimer--;
+    const percent = (feverTimer / 300) * 100;
+    feverFill.style.width = `${percent}%`;
+
+    if (feverTimer <= 0) {
+      isFever = false;
+      feverCount = 0;
+      updateFeverUI();
+    }
+  }
+
+  // Draw World Background
+  drawBackground();
+
+  if (isGameStarted) {
+    gameSpeed += 0.001; // Gradually increase speed for rhythm challenge
+    
+    karina.update();
+    handleSpawning();
+
+    // Update Objects
+    gameObjects.forEach(obj => obj.update());
+    gameObjects = gameObjects.filter(obj => !obj.markedForDeletion);
+
+    checkHitsAndCollisions();
+  }
+
+  // Render Game Entities
+  gameObjects.forEach(obj => obj.draw());
+  karina.draw();
+  drawHUD();
+
+  // START / GAME OVER Overlay Windows
+  if (!isGameStarted && !isGameOver) {
+    ctx.fillStyle = 'rgba(8, 3, 18, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = '900 32px Orbitron';
+    ctx.fillStyle = '#ff007f';
+    ctx.shadowColor = '#ff007f';
+    ctx.shadowBlur = 20;
+    ctx.textAlign = 'center';
+    ctx.fillText('KARINA KWANGYA RHYTHM', canvas.width / 2, 140);
+
+    ctx.font = '16px Orbitron';
+    ctx.fillStyle = '#00ffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 10;
+    ctx.fillText('PRESS SPACE OR TAP SCREEN TO START', canvas.width / 2, 195);
+  }
+
+  if (isGameOver) {
+    ctx.fillStyle = 'rgba(10, 0, 20, 0.85)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.font = '900 36px Orbitron';
+    ctx.fillStyle = '#ff0033';
+    ctx.shadowColor = '#ff0033';
+    ctx.shadowBlur = 20;
+    ctx.textAlign = 'center';
+    ctx.fillText('STAGE FAILED', canvas.width / 2, 130);
+
+    ctx.font = '18px Orbitron';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 0;
+    ctx.fillText(`FINAL SCORE: ${score}`, canvas.width / 2, 175);
+    ctx.fillText(`MAX COMBO: ${maxCombo}`, canvas.width / 2, 205);
+
+    ctx.font = '14px Orbitron';
+    ctx.fillStyle = '#00ffff';
+    ctx.fillText('PRESS SPACE OR TAP TO RETRY', canvas.width / 2, 250);
+  }
+
+  requestAnimationFrame(mainLoop);
+}
+
+// User Input Event Listeners (Keyboard & Touch/Mouse)
+function handleActionUp() {
+  sounds.init();
+  if (!isGameStarted) {
+    resetGame();
+  } else {
+    karina.switchTrack(TRACKS.UP);
+  }
+}
+
+function handleActionDown() {
+  sounds.init();
+  if (!isGameStarted) {
+    resetGame();
+  } else {
+    karina.switchTrack(TRACKS.DOWN);
+  }
+}
+
+// Keyboard controls
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+    e.preventDefault();
+    handleActionUp();
+  } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+    e.preventDefault();
+    handleActionDown();
+  } else if (e.code === 'Space') {
+    e.preventDefault();
+    if (!isGameStarted) {
+      resetGame();
+    } else {
+      // Toggle track on Spacebar
+      karina.switchTrack(karina.track === TRACKS.UP ? TRACKS.DOWN : TRACKS.UP);
+    }
+  }
+});
+
+// Touch / Click Canvas controls (Split Screen UP/DOWN)
+canvas.addEventListener('pointerdown', (e) => {
+  sounds.init();
+  if (!isGameStarted) {
+    resetGame();
+    return;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const clickY = e.clientY - rect.top;
+  const canvasHeight = rect.height;
+
+  if (clickY < canvasHeight / 2) {
+    handleActionUp();
+  } else {
+    handleActionDown();
+  }
+});
+
+// Launch Game Engine
+mainLoop();
+</script>
+</body>
+</html>
